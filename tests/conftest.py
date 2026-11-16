@@ -1,28 +1,8 @@
-import ast
-from pathlib import Path
-
 import numpy as np
 import pandas as pd
 import pytest
 
-EXPLORATION = Path(__file__).resolve().parent.parent / "notebooks" / "exploration.py"
-
-
-def load_functions(path):
-    """Charge uniquement les imports, constantes et fonctions de exploration.py,
-    sans exécuter l'exploration (lecture du CSV, graphiques)."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    keep = (ast.Import, ast.ImportFrom, ast.FunctionDef)
-    tree.body = [n for n in tree.body if isinstance(n, keep)
-                 or (isinstance(n, ast.Assign) and getattr(n.targets[0], "id", None) in ("TARGET", "FEATURES"))]
-    namespace = {}
-    exec(compile(tree, str(path), "exec"), namespace)
-    return namespace
-
-
-expl = load_functions(EXPLORATION)
-FEATURES, TARGET = expl["FEATURES"], expl["TARGET"]
-validate_data, preprocess_data = expl["validate_data"], expl["preprocess_data"]
+from train import FEATURES, TARGET
 
 
 @pytest.fixture
@@ -35,3 +15,16 @@ def valid_df():
     df["Amount"] = rng.uniform(0, 500, n)
     df[TARGET] = [0] * 18 + [1] * 2
     return df
+
+
+@pytest.fixture
+def train_data():
+    """Jeu synthétique déséquilibré (10 % de fraudes) où V14 sépare les classes."""
+    rng = np.random.default_rng(0)
+    n, n_fraud = 500, 50
+    X = pd.DataFrame(rng.normal(size=(n, len(FEATURES))), columns=FEATURES)
+    X["Time"] = rng.uniform(0, 172800, n)
+    X["Amount"] = rng.uniform(0, 500, n)
+    y = pd.Series([0] * (n - n_fraud) + [1] * n_fraud)
+    X.loc[y == 1, "V14"] -= 4
+    return X, y

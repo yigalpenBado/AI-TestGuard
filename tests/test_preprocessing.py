@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from tests.conftest import FEATURES, TARGET, preprocess_data, validate_data
+from train import FEATURES, TARGET, preprocess_data, validate_data
 
 DATASET = Path(__file__).resolve().parent.parent / "data" / "raw" / "creditcard.csv"
 
