@@ -2,7 +2,8 @@
 import numpy as np
 import pytest
 
-from train import MODELS, evaluate_model, predict_fraud, split_data, train_model
+from src.data import split_data
+from src.train import MODELS, evaluate_model, predict_fraud, train_model
 
 
 class TestSplitData:  # T08

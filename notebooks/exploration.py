@@ -7,13 +7,16 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Chemins relatifs à la racine du projet (fonctionne en script ou en mode cellules)
-ROOT = Path(__file__).resolve().parent.parent if "__file__" in globals() else Path.cwd().parent
+# Nous recuperons le context du projet pour pouvoir importer les fonctions de train.py
+ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 
 #%%
-## Fonctions de contrôle et de préparation des données (définies dans train.py, testées dans tests/)
-from train import FEATURES, TARGET, preprocess_data, validate_data
+## Nous importons les fonctions de contrôle
+# et de préparation des données (définies dans src/data.py, testées dans tests/)
+import sys
+sys.path.insert(0, str(ROOT))
+from src.data import FEATURES, TARGET, preprocess_data
 
 #%%
 ## Lecture du jeu de données

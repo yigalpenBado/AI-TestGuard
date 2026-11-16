@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from train import FEATURES, TARGET
+from src.data import FEATURES, TARGET
 
 
 @pytest.fixture
