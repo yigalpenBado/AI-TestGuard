@@ -32,8 +32,11 @@ print(df.shape)
 #  Nous Observons 284 807 transactions  
 # 31 colonnes : Time, V1 à V28, Amount, Class
 
-#%%
-## Vérification du schéma : colonnes attendues et types (T01, T02)
+#%% [markdown]
+# Vérification du schéma :  T01 et T02.
+# Les colonnes nécessaires sont présentes
+# Les données respectent les types attendus
+ #%%
 EXPECTED_COLUMNS = FEATURES + [TARGET]
 print("\nColonnes manquantes :", set(EXPECTED_COLUMNS) - set(df.columns))
 print("Colonnes inattendues :", set(df.columns) - set(EXPECTED_COLUMNS))

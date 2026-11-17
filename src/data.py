@@ -7,7 +7,7 @@ SEED = 42
 
 # Fonctions de contrôle et de préparation des données (testées dans tests/)
 # Deux comportements :
-# - REJET (ValueError) si le contrat n'est pas respecté (T01, T02, T03, T12) ;
+# - On leve une exception (ValueError) si le contrat n'est pas respecté (T01, T02, T03, T12) ;
 # - CORRECTION documentée : doublons supprimés (T08), colonnes en trop ignorées,
 #   colonnes remises dans l'ordre attendu.
 # La standardisation de Time et Amount se fera dans le Pipeline, sur le train uniquement (T09).
@@ -16,11 +16,14 @@ FEATURES = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
 
 
 def validate_data(df, require_target=True):
-    """Contrôle le schéma et les types ; lève ValueError si le contrat n'est pas respecté."""
+    """Contrôle le schéma et les types ; lève une exception ValueError si les donnees ne sont pas conformes au contrat."""
+    # Le dataframe de doit pas etre vive, cela est un prealable à la validation du schéma et des types
     if not isinstance(df, pd.DataFrame) or df.empty:
         raise ValueError("Les données doivent être un DataFrame non vide.")
+    # Le dataframe doit contenir les colonnes attendues et sans doublons; et respecter les types attendus
     if df.columns.duplicated().any():
         raise ValueError(f"Colonnes dupliquées : {df.columns[df.columns.duplicated()].tolist()}")
+    # Le dataframe ne doit pas contenir de valeurs manquantes ou infinies
     cols = FEATURES + [TARGET] if require_target or TARGET in df.columns else FEATURES
     missing = [c for c in cols if c not in df.columns]
     if missing:
@@ -32,8 +35,10 @@ def validate_data(df, require_target=True):
         raise ValueError("Valeurs manquantes détectées.")
     if np.isinf(df[cols].to_numpy(dtype=float)).any():
         raise ValueError("Valeurs infinies détectées.")
+    # La cible doit contenir uniquement 0 et 1
     if TARGET in cols and not df[TARGET].isin([0, 1]).all():
         raise ValueError("La cible Class ne doit contenir que 0 et 1.")
+    # Time et Amount doivent être positifs
     if (df[["Time", "Amount"]] < 0).any().any():
         raise ValueError("Time et Amount ne doivent pas être négatifs.")
     return df

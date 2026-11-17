@@ -3,19 +3,28 @@
 - T09 : le scaler fait partie du Pipeline, il est donc ajusté sur le train uniquement ;
 - T05 : le modèle est choisi sur la validation ; le test ne sert qu'à l'évaluation finale.
 """
+
 import json
 from pathlib import Path
 
 import joblib
 import pandas as pd
+
 # Modèles de classification adaptés au déséquilibre (T10)
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier
 
-#Métriques adaptées au déséquilibre (T10)
-from sklearn.metrics import (accuracy_score, average_precision_score, confusion_matrix,
-                             f1_score, precision_score, recall_score, roc_auc_score)
+# Métriques adaptées au déséquilibre (T10)
+from sklearn.metrics import (
+    accuracy_score,
+    average_precision_score,
+    confusion_matrix,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -24,8 +33,12 @@ from src.data import FEATURES, SEED, preprocess_data, split_data, validate_data
 ROOT = Path(__file__).resolve().parent.parent
 
 MODELS = {
-    "logistic_regression": lambda: LogisticRegression(class_weight="balanced", max_iter=1000, random_state=SEED),
-    "decision_tree": lambda: DecisionTreeClassifier(class_weight="balanced", max_depth=5, random_state=SEED),
+    "logistic_regression": lambda: LogisticRegression(
+        class_weight="balanced", max_iter=1000, random_state=SEED
+    ),
+    "decision_tree": lambda: DecisionTreeClassifier(
+        class_weight="balanced", max_depth=5, random_state=SEED
+    ),
 }
 
 
@@ -54,7 +67,10 @@ def evaluate_model(y_true, y_pred, y_proba):
         "pr_auc": average_precision_score(y_true, y_proba),
         "roc_auc": roc_auc_score(y_true, y_proba),
         "accuracy": accuracy_score(y_true, y_pred),
-        "tn": int(tn), "fp": int(fp), "fn": int(fn), "tp": int(tp),
+        "tn": int(tn),
+        "fp": int(fp),
+        "fn": int(fn),
+        "tp": int(tp),
     }
 
 
@@ -69,7 +85,10 @@ if __name__ == "__main__":
     for name in MODELS:
         models[name] = train_model(X_train, y_train, name)
         results[name] = evaluate_model(y_val, *predict_fraud(models[name], X_val))
-        print(f"\n{name} (validation) :", {k: round(v, 4) for k, v in results[name].items()})
+        print(
+            f"\n{name} (validation) :",
+            {k: round(v, 4) for k, v in results[name].items()},
+        )
 
     ## Choix du meilleur modèle selon la PR-AUC de validation
     best = max(results, key=lambda n: results[n]["pr_auc"])
@@ -82,5 +101,9 @@ if __name__ == "__main__":
     (ROOT / "reports").mkdir(exist_ok=True)
     joblib.dump(models[best], ROOT / "models" / "model.pkl")
     with open(ROOT / "reports" / "metrics.json", "w") as f:
-        json.dump({"seed": SEED, "model": best, "validation": results, "test": test_metrics}, f, indent=2)
+        json.dump(
+            {"seed": SEED, "model": best, "validation": results, "test": test_metrics},
+            f,
+            indent=2,
+        )
     print("\nModèle : models/model.pkl | Métriques : reports/metrics.json")

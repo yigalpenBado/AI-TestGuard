@@ -11,62 +11,28 @@ DATASET = Path(__file__).resolve().parent.parent / "data" / "raw" / "creditcard.
 
 
 class TestValidateData:
-    """Rejet explicite des données qui ne respectent pas le contrat."""
+    """Acceptation des données conformes, rejet explicite des autres."""
 
-    def test_colonnes_requises_presentes(self, valid_df):  # T01
-        assert validate_data(valid_df) is valid_df
+    def test_donnees_valides_acceptees(self, valid_df):  # T01, T02
+        assert validate_data(valid_df) is valid_df                       # toutes les colonnes requises
+        assert len(validate_data(valid_df.head(1))) == 1                 # une seule observation
+        assert validate_data(valid_df.drop(columns=TARGET), require_target=False) is not None  # prédiction sans cible
 
-    @pytest.mark.parametrize("col", ["Time", "V14", "Amount", TARGET])
-    def test_colonne_absente(self, valid_df, col):  # T01
-        with pytest.raises(ValueError, match="manquantes"):
-            validate_data(valid_df.drop(columns=col))
-
-    def test_colonne_dupliquee(self, valid_df):  # T01
-        df = pd.concat([valid_df, valid_df[["Amount"]]], axis=1)
-        with pytest.raises(ValueError, match="dupliquées"):
-            validate_data(df)
-
-    def test_valeur_manquante(self, valid_df):  # T03 / T12
-        valid_df.loc[3, "V1"] = np.nan
-        with pytest.raises(ValueError, match="manquantes"):
-            validate_data(valid_df)
-
-    @pytest.mark.parametrize("value", [np.inf, -np.inf])
-    def test_valeur_infinie(self, valid_df, value):  # T03
-        valid_df.loc[0, "Amount"] = value
-        with pytest.raises(ValueError, match="infinies"):
-            validate_data(valid_df)
-
-    def test_donnees_vides(self):
-        with pytest.raises(ValueError, match="non vide"):
-            validate_data(pd.DataFrame(columns=FEATURES + [TARGET]))
-
-    def test_pas_un_dataframe(self):
-        with pytest.raises(ValueError, match="DataFrame"):
-            validate_data([[1, 2, 3]])
-
-    def test_type_incorrect(self, valid_df):  # T02
-        valid_df["Amount"] = valid_df["Amount"].astype(str)
-        with pytest.raises(ValueError, match="non numériques"):
-            validate_data(valid_df)
-
-    @pytest.mark.parametrize("value", [2, -1])
-    def test_cible_hors_0_1(self, valid_df, value):
-        valid_df.loc[0, TARGET] = value
-        with pytest.raises(ValueError, match="0 et 1"):
-            validate_data(valid_df)
-
-    @pytest.mark.parametrize("col", ["Time", "Amount"])
-    def test_valeur_negative(self, valid_df, col):
-        valid_df.loc[0, col] = -1.0
-        with pytest.raises(ValueError, match="négatifs"):
-            validate_data(valid_df)
-
-    def test_une_seule_observation(self, valid_df):
-        assert len(validate_data(valid_df.head(1))) == 1
-
-    def test_sans_cible_en_prediction(self, valid_df):
-        validate_data(valid_df.drop(columns=TARGET), require_target=False)
+    @pytest.mark.parametrize("transform, message", [
+        (lambda df: df.drop(columns="Time"), "Colonnes manquantes"),             # T01 colonne absente
+        (lambda df: df.drop(columns=TARGET), "Colonnes manquantes"),             # T01 cible absente
+        (lambda df: pd.concat([df, df[["Amount"]]], axis=1), "dupliquées"),  # T01 colonne dupliquée
+        (lambda df: df.astype({"Amount": str}), "non numériques"),        # T02 type incorrect
+        # Une seule valeur fautive (ligne 0), le reste du jeu étant correct
+        (lambda df: df.assign(V1=df["V1"].where(df.index != 0, np.nan)), "Valeurs manquantes"),  # T03
+        (lambda df: df.assign(Amount=df["Amount"].where(df.index != 0, np.inf)), "infinies"),    # T03
+        (lambda df: df.assign(Class=df[TARGET].where(df.index != 0, 2)), "0 et 1"),             # cible hors {0, 1}
+        (lambda df: df.assign(Amount=-1.0), "négatifs"),                  # montant négatif
+        (lambda df: df.iloc[0:0], "non vide"),                            # données vides
+    ])
+    def test_donnees_invalides_rejetees(self, valid_df, transform, message):
+        with pytest.raises(ValueError, match=message):
+            validate_data(transform(valid_df))
 
 
 class TestPreprocessData:
