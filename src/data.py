@@ -12,7 +12,12 @@ SEED = 42
 #   colonnes remises dans l'ordre attendu.
 # La standardisation de Time et Amount se fera dans le Pipeline, sur le train uniquement (T09).
 TARGET = "Class"
-FEATURES = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
+
+# Variables explicatives : Time, puis V1 à V28 (composantes ACP), puis Amount
+FEATURES = ["Time"]
+for i in range(1, 29):
+    FEATURES.append("V" + str(i))
+FEATURES.append("Amount")
 
 
 def validate_data(df, require_target=True):
