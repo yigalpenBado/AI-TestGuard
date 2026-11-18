@@ -25,38 +25,67 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+from sklearn.base import clone
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+# Racine du projet ajoutée au chemin d'import : permet « python src/train.py »,
+# le bouton Run de VS Code et l'exécution cellule par cellule.
+import sys
+
+ROOT = (
+    Path(__file__).resolve().parent.parent
+    if "__file__" in globals()
+    else Path.cwd().parent
+)
+sys.path.insert(0, str(ROOT))
 from src.data import FEATURES, SEED, preprocess_data, split_data, validate_data
 
-ROOT = Path(__file__).resolve().parent.parent
-
+# Nous utiliserons le SEED 42 pour la reproductibilité des résultats (T06)
+# class_weight="balanced" : les fraudes (0,17 %) pèsent autant que les transactions normales
 MODELS = {
-    "logistic_regression": lambda: LogisticRegression(
-        class_weight="balanced", max_iter=1000, random_state=SEED
+    "logistic_regression": Pipeline(
+        [
+            ("scaler", StandardScaler()),
+            (
+                "model",
+                LogisticRegression(
+                    class_weight="balanced", max_iter=1000, random_state=SEED
+                ),
+            ),
+        ]
     ),
-    "decision_tree": lambda: DecisionTreeClassifier(
+    "decision_tree": DecisionTreeClassifier(
         class_weight="balanced", max_depth=5, random_state=SEED
+    ),
+    "random_forest": RandomForestClassifier(
+        class_weight="balanced", n_estimators=200, random_state=SEED
     ),
 }
 
-
+# Entrainement du modèle.
+# Nous utilisons clone() pour créer une copie neuve du modèle à chaque entraînement, 
+# afin d'éviter que les modèles partagent des paramètres internes (T09).
+# Nous entrainon les modeles suivants : la regression logistique, l'arbre de décision et la forêt aléatoire.
 def train_model(X, y, model_name="logistic_regression"):
     """Entraîne le pipeline scaler + modèle. Le scaler n'est ajusté que sur X (T09)."""
     if model_name not in MODELS:
         raise ValueError(f"Modèle inconnu : {model_name}. Choix : {list(MODELS)}")
-    model = Pipeline([("scaler", StandardScaler()), ("model", MODELS[model_name]())])
-    return model.fit(X, y)
+    print(f"\nEntraînement : {model_name}")
+    return clone(MODELS[model_name]).fit(
+        X, y
+    )  # clone : copie neuve à chaque entraînement
 
-
+# Apres l'entrainement, nous pouvons prédire les fraudes sur un jeu de données donné.
+# Une validation est effectuée pour vérifier que les données sont valides (T12).
+# avant de retourner les prédictions, nous calculons les probabilités de fraude et appliquons un seuil pour obtenir des décisions binaires (0/1).
 def predict_fraud(model, X, threshold=0.5):
     """Retourne (décisions 0/1, probabilités de fraude). Rejette une entrée invalide (T12)."""
     validate_data(X, require_target=False)
     y_proba = model.predict_proba(X[FEATURES])[:, 1]
     return (y_proba >= threshold).astype(int), y_proba
 
-
+# Après l'entrainement et la prédiction, nous pouvons évaluer les performances du modèle.
 def evaluate_model(y_true, y_pred, y_proba):
     """Métriques adaptées au déséquilibre (T10) ; l'accuracy n'est donnée qu'à titre indicatif."""
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
@@ -91,6 +120,7 @@ if __name__ == "__main__":
         )
 
     ## Choix du meilleur modèle selon la PR-AUC de validation
+    ## Le Random forest est le modèle retenu
     best = max(results, key=lambda n: results[n]["pr_auc"])
     test_metrics = evaluate_model(y_test, *predict_fraud(models[best], X_test))
     print(f"\nModèle retenu : {best}")

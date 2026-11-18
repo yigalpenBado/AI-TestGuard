@@ -1,4 +1,10 @@
-"""Tests unitaires de validate_data et preprocess_data (plan de test : T01, T02, T03, T08, T12)."""
+"""Tests unitaires de validate_data et preprocess_data (plan de test : T01, T02, T03, T08, T12).
+T01 : Les colonnes nécessaires sont présentes
+T02 : Les données respectent les types attendus
+T03 : Le prétraitement ne produit pas de valeurs non finies
+T08 : Les partitions train/val/test sont disjointes, sans doublon commun, et stratifiées
+T12 : Une entrée invalide est rejetée explicitement
+"""
 from pathlib import Path
 
 import numpy as np
@@ -6,10 +12,11 @@ import pandas as pd
 import pytest
 
 from src.data import FEATURES, TARGET, preprocess_data, split_data, validate_data
-
+# Chaque test est indépendant et ne doit pas modifier le jeu de données original.
 DATASET = Path(__file__).resolve().parent.parent / "data" / "raw" / "creditcard.csv"
 
-
+# Il concerne les tests unitaires de validate_data et preprocess_data,
+# ainsi que le test d'acceptation sur le vrai jeu de données Kaggle.
 class TestValidateData:
     """Acceptation des données conformes, rejet explicite des autres."""
 
