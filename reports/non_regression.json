@@ -1,0 +1,36 @@
+{
+  "baseline_commit": "f508122",
+  "current_commit": "f508122-modifie",
+  "tolerance": 0.02,
+  "metrics": {
+    "recall": {
+      "baseline": 0.8617021276595744,
+      "current": 0.8617021276595744,
+      "difference": 0.0
+    },
+    "precision": {
+      "baseline": 0.9,
+      "current": 0.9,
+      "difference": 0.0
+    },
+    "f1": {
+      "baseline": 0.8804347826086957,
+      "current": 0.8804347826086957,
+      "difference": 0.0
+    },
+    "pr_auc": {
+      "baseline": 0.8758086268156069,
+      "current": 0.8758086268156069,
+      "difference": 0.0
+    },
+    "fpr": {
+      "baseline": 0.00015886745158955713,
+      "current": 0.00015886745158955713,
+      "difference": 0.0
+    }
+  },
+  "decision": "accepter",
+  "reasons": [
+    "aucune d\u00e9gradation au-del\u00e0 de la tol\u00e9rance"
+  ]
+}

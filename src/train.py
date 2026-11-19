@@ -231,6 +231,45 @@ def describe_version(model, model_name, threshold, val_metrics, csv_path, X, y, 
     }
 
 
+# Comparaison d'une nouvelle version à la référence (Partie VI, T14)
+REGRESSION_TOLERANCE = 0.02  # baisse maximale tolérée (plan de test, T14)
+
+
+def compare_to_baseline(baseline, current, tolerance=REGRESSION_TOLERANCE):
+    """Compare deux versions sur la validation. Retourne (décision, raisons).
+
+    - « rejeter »    : le rappel ou la PR-AUC baisse de plus de la tolérance ;
+    - « investiguer » : la précision baisse de plus de la tolérance, ou les données ou
+                        les bibliothèques ont changé (la comparaison n'est plus fiable) ;
+    - « accepter »   : sinon.
+    """
+    rejeter = []
+    investiguer = []
+
+    # Métriques critiques : une baisse au-delà de la tolérance est une régression
+    for metric in ("recall", "pr_auc"):
+        baisse = baseline["validation_metrics"][metric] - current["validation_metrics"][metric]
+        if baisse > tolerance:
+            rejeter.append(f"{metric} en baisse de {baisse:.4f} (> {tolerance})")
+
+    # Précision : une baisse signifie plus de fausses alertes, à analyser
+    baisse = baseline["validation_metrics"]["precision"] - current["validation_metrics"]["precision"]
+    if baisse > tolerance:
+        investiguer.append(f"precision en baisse de {baisse:.4f} (> {tolerance})")
+
+    # Contexte : si les données ou les bibliothèques changent, la comparaison n'est plus fiable
+    if baseline["data"]["sha256"] != current["data"]["sha256"]:
+        investiguer.append("jeu de données différent de celui de la référence")
+    if baseline["libraries"] != current["libraries"]:
+        investiguer.append("versions des bibliothèques différentes de la référence")
+
+    if rejeter:
+        return "rejeter", rejeter + investiguer
+    if investiguer:
+        return "investiguer", investiguer
+    return "accepter", ["aucune dégradation au-delà de la tolérance"]
+
+
 if __name__ == "__main__":
     ## Chargement, prétraitement et découpage
     X, y = preprocess_data(load_data(ROOT / "data" / "raw" / "creditcard.csv"))
@@ -317,3 +356,25 @@ if __name__ == "__main__":
             with open(baseline_path, "w") as f:
                 json.dump(version, f, indent=2, default=str)
             print(f"Référence enregistrée : {baseline_path}")
+
+    ## Contrôle de non-régression : comparaison de la version courante à la référence
+    if baseline_path.exists():
+        with open(baseline_path) as f:
+            baseline = json.load(f)
+        decision, reasons = compare_to_baseline(baseline, version)
+        comparison = {
+            "baseline_commit": baseline["code"]["commit"],
+            "current_commit": version["code"]["commit"],
+            "tolerance": REGRESSION_TOLERANCE,
+            "metrics": {
+                k: {"baseline": baseline["validation_metrics"][k],
+                    "current": version["validation_metrics"][k],
+                    "difference": version["validation_metrics"][k] - baseline["validation_metrics"][k]}
+                for k in ("recall", "precision", "f1", "pr_auc", "fpr")
+            },
+            "decision": decision,
+            "reasons": reasons,
+        }
+        with open(ROOT / "reports" / "non_regression.json", "w") as f:
+            json.dump(comparison, f, indent=2)
+        print(f"Non-régression : {decision.upper()} ({'; '.join(reasons)})")
