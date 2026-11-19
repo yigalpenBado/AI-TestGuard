@@ -43,24 +43,21 @@ from src.data import FEATURES, SEED, preprocess_data, split_data, validate_data
 
 # Nous utiliserons le SEED 42 pour la reproductibilité des résultats (T06)
 # class_weight="balanced" : les fraudes (0,17 %) pèsent autant que les transactions normales
+# Chaque modèle est un Pipeline scaler + modèle : le scaler est ajusté sur le train
+# uniquement (T09) et il est sauvegardé avec le modèle. Il ne change rien pour les arbres.
 MODELS = {
-    "logistic_regression": Pipeline(
-        [
-            ("scaler", StandardScaler()),
-            (
-                "model",
-                LogisticRegression(
-                    class_weight="balanced", max_iter=1000, random_state=SEED
-                ),
-            ),
-        ]
-    ),
-    "decision_tree": DecisionTreeClassifier(
-        class_weight="balanced", max_depth=5, random_state=SEED
-    ),
-    "random_forest": RandomForestClassifier(
-        class_weight="balanced", n_estimators=200, random_state=SEED
-    ),
+    "logistic_regression": Pipeline([
+        ("scaler", StandardScaler()),
+        ("model", LogisticRegression(class_weight="balanced", max_iter=1000, random_state=SEED)),
+    ]),
+    "decision_tree": Pipeline([
+        ("scaler", StandardScaler()),
+        ("model", DecisionTreeClassifier(class_weight="balanced", max_depth=5, random_state=SEED)),
+    ]),
+    "random_forest": Pipeline([
+        ("scaler", StandardScaler()),
+        ("model", RandomForestClassifier(class_weight="balanced", n_estimators=200, random_state=SEED)),
+    ]),
 }
 
 # Entrainement du modèle.
@@ -143,17 +140,60 @@ def choose_threshold(y_true, y_proba, min_recall=0.75):
 
     return best_threshold
 
+# =============================================================================
+# Mise en oeuvre du pipeline complet : chargement, prétraitement, découpage, 
+# entraînement, choix du seuil sur la validation, évaluation finale sur le test 
+# et sauvegarde du modèle et des métriques.
+# =============================================================================
+# Chargement des données : erreurs explicites si le fichier est absent ou vide.
+def load_data(path):
+    """Lit le fichier CSV des transactions."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Fichier de données introuvable : {path}")
+    df = pd.read_csv(path)
+    if df.empty:
+        raise ValueError(f"Le fichier de données est vide : {path}")
+    return df
 
-# Rappel visé sur la validation : 0.85, soit une marge de 10 points au-dessus de
+
+# Sauvegarde du modèle avec son seuil : le seuil choisi sur la validation
+# doit être réutilisé tel quel après rechargement.
+def save_model(model, threshold, path):
+    """Sauvegarde le modèle et son seuil dans un seul fichier (joblib)."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    joblib.dump({"model": model, "threshold": threshold}, path)
+
+
+# Rechargement du modèle sauvegardé : erreurs explicites si le fichier est absent ou invalide.
+def load_model(path):
+    """Recharge le modèle et son seuil. Retourne (model, threshold)."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Fichier modèle introuvable : {path}")
+    try:
+        saved = joblib.load(path)
+    except Exception as error:
+        raise ValueError(f"Fichier modèle illisible : {path}") from error
+    if not isinstance(saved, dict) or "model" not in saved or "threshold" not in saved:
+        raise ValueError(f"Fichier modèle invalide (modèle ou seuil manquant) : {path}")
+    return saved["model"], saved["threshold"]
+
+
+# Verification sur la validation à 0.85, soit une marge de 10 points au-dessus de
 # l'exigence de 0.75 (T11). Justification : la validation ne contient que ~94 fraudes,
 # chaque fraude manquée fait varier le rappel d'environ 1 point ; le rappel mesuré
 # sur la validation peut donc baisser sensiblement sur de nouvelles données.
 VAL_MIN_RECALL = 0.85
 
+# Tolérance numérique pour comparer les prédictions avant et après rechargement
+TOLERANCE = 1e-12
+
 
 if __name__ == "__main__":
     ## Chargement, prétraitement et découpage
-    X, y = preprocess_data(pd.read_csv(ROOT / "data" / "raw" / "creditcard.csv"))
+    X, y = preprocess_data(load_data(ROOT / "data" / "raw" / "creditcard.csv"))
     X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
     print(f"Train {len(X_train)} | Val {len(X_val)} | Test {len(X_test)}")
 
@@ -172,15 +212,26 @@ if __name__ == "__main__":
 
     ## Choix du meilleur modèle selon la PR-AUC de validation
     best = max(results, key=lambda n: results[n]["pr_auc"])
-    ## Évaluation finale, unique, sur le test avec le seuil choisi sur la validation
-    test_metrics = evaluate_model(y_test, *predict_fraud(models[best], X_test, thresholds[best]))
     print(f"\nModèle retenu : {best} (seuil {thresholds[best]})")
+
+    ## Sauvegarde du pipeline et de son seuil, puis rechargement
+    model_path = ROOT / "models" / "model.pkl"
+    save_model(models[best], thresholds[best], model_path)
+    loaded_model, loaded_threshold = load_model(model_path)
+
+    ## Prédictions sur le test avec le pipeline RECHARGÉ (évaluation finale, unique)
+    y_pred_test, y_proba_test = predict_fraud(loaded_model, X_test, loaded_threshold)
+    test_metrics = evaluate_model(y_test, y_pred_test, y_proba_test)
     print("Test :", {k: round(v, 4) for k, v in test_metrics.items()})
 
-    ## Sauvegarde du modèle et des preuves
-    (ROOT / "models").mkdir(exist_ok=True)
+    ## Preuve de reproductibilité : mêmes probabilités avant et après rechargement
+    _, y_proba_before = predict_fraud(models[best], X_test)
+    max_diff = float(abs(y_proba_before - y_proba_test).max())
+    reproducible = max_diff <= TOLERANCE and loaded_threshold == thresholds[best]
+    print(f"Écart maximal avant / après rechargement : {max_diff} (tolérance {TOLERANCE})")
+
+    ## Rapport de métriques et preuve de reproductibilité
     (ROOT / "reports").mkdir(exist_ok=True)
-    joblib.dump(models[best], ROOT / "models" / "model.pkl")
     with open(ROOT / "reports" / "metrics.json", "w") as f:
         json.dump(
             {"seed": SEED, "model": best, "threshold": thresholds[best],
@@ -188,4 +239,13 @@ if __name__ == "__main__":
             f,
             indent=2,
         )
-    print("\nModèle : models/model.pkl | Métriques : reports/metrics.json")
+    with open(ROOT / "reports" / "reproductibilite.json", "w") as f:
+        json.dump(
+            {"model_file": "models/model.pkl", "n_predictions": len(y_proba_test),
+             "max_abs_diff": max_diff, "tolerance": TOLERANCE,
+             "threshold_saved": thresholds[best], "threshold_loaded": loaded_threshold,
+             "reproducible": reproducible},
+            f,
+            indent=2,
+        )
+    print("\nModèle : models/model.pkl | Rapports : reports/metrics.json, reports/reproductibilite.json")
