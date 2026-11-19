@@ -191,6 +191,46 @@ VAL_MIN_RECALL = 0.85
 TOLERANCE = 1e-12
 
 
+# Description d'une version du modèle (Partie VI) : tout ce qu'il faut pour la comparer
+# à une autre version. Sert à créer la référence (baseline) et la version courante.
+def describe_version(model, model_name, threshold, val_metrics, csv_path, X, y, y_val):
+    """Retourne un dictionnaire : code, modèle, bibliothèques, graine, seuil, métriques, données."""
+    import hashlib
+    import subprocess
+    from datetime import datetime
+
+    import numpy
+    import sklearn
+
+    # Version du code : commit git courant (« inconnu » hors dépôt git),
+    # suivi de « -modifie » si du code n'est pas commité (la version n'est alors pas traçable)
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
+                                capture_output=True, text=True, check=True).stdout.strip()
+        changes = subprocess.run(["git", "status", "--porcelain", "src"], cwd=ROOT,
+                                 capture_output=True, text=True, check=True).stdout.strip()
+        if changes:
+            commit += "-modifie"
+    except Exception:
+        commit = "inconnu"
+
+    # Empreinte du fichier de données : change si une seule valeur du CSV change
+    sha256 = hashlib.sha256(Path(csv_path).read_bytes()).hexdigest()
+
+    return {
+        "date": datetime.now().isoformat(timespec="seconds"),
+        "code": {"commit": commit},
+        "model": {"name": model_name, "params": model.named_steps["model"].get_params()},
+        "libraries": {"scikit-learn": sklearn.__version__, "pandas": pd.__version__,
+                      "numpy": numpy.__version__, "joblib": joblib.__version__},
+        "seed": SEED,
+        "threshold": threshold,
+        "validation_metrics": val_metrics,
+        "data": {"sha256": sha256, "n_rows": len(X), "n_frauds": int(y.sum()),
+                 "n_validation": len(y_val), "n_validation_frauds": int(y_val.sum())},
+    }
+
+
 if __name__ == "__main__":
     ## Chargement, prétraitement et découpage
     X, y = preprocess_data(load_data(ROOT / "data" / "raw" / "creditcard.csv"))
@@ -224,6 +264,15 @@ if __name__ == "__main__":
     test_metrics = evaluate_model(y_test, y_pred_test, y_proba_test)
     print("Test :", {k: round(v, 4) for k, v in test_metrics.items()})
 
+    ## Surapprentissage : mêmes métriques sur le train, au même seuil, et écart train - test
+    train_metrics = evaluate_model(y_train, *predict_fraud(loaded_model, X_train, loaded_threshold))
+    overfitting = {
+        k: round(train_metrics[k] - test_metrics[k], 4)
+        for k in ("recall", "precision", "f1", "pr_auc")
+    }
+    print("Train :", {k: round(v, 4) for k, v in train_metrics.items()})
+    print("Écart train - test :", overfitting)
+
     ## Preuve de reproductibilité : mêmes probabilités avant et après rechargement
     _, y_proba_before = predict_fraud(models[best], X_test)
     max_diff = float(abs(y_proba_before - y_proba_test).max())
@@ -235,7 +284,8 @@ if __name__ == "__main__":
     with open(ROOT / "reports" / "metrics.json", "w") as f:
         json.dump(
             {"seed": SEED, "model": best, "threshold": thresholds[best],
-             "thresholds": thresholds, "validation": results, "test": test_metrics},
+             "thresholds": thresholds, "validation": results, "test": test_metrics,
+             "train": train_metrics, "ecart_train_test": overfitting},
             f,
             indent=2,
         )
@@ -249,3 +299,21 @@ if __name__ == "__main__":
             indent=2,
         )
     print("\nModèle : models/model.pkl | Rapports : reports/metrics.json, reports/reproductibilite.json")
+
+    ## Description de la version courante (réécrite à chaque exécution)
+    csv_path = ROOT / "data" / "raw" / "creditcard.csv"
+    version = describe_version(loaded_model, best, loaded_threshold, results[best], csv_path, X, y, y_val)
+    with open(ROOT / "reports" / "version_courante.json", "w") as f:
+        json.dump(version, f, indent=2, default=str)
+    print("Version courante : reports/version_courante.json")
+
+    ## Référence (baseline) : créée UNIQUEMENT sur demande explicite, jamais écrasée.
+    ## Pour la remplacer, il faut supprimer le fichier à la main : décision volontaire.
+    baseline_path = ROOT / "reports" / "baseline.json"
+    if "--save-baseline" in sys.argv:
+        if baseline_path.exists():
+            print(f"Référence NON modifiée : {baseline_path} existe déjà (supprimez-le pour la remplacer).")
+        else:
+            with open(baseline_path, "w") as f:
+                json.dump(version, f, indent=2, default=str)
+            print(f"Référence enregistrée : {baseline_path}")
