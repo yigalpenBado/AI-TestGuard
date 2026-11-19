@@ -49,6 +49,33 @@ def validate_data(df, require_target=True):
     return df
 
 
+# Contrôle des entrées valides mais inhabituelles (Partie V) : on ne rejette pas,
+# on renvoie des ALERTES. Les données invalides sont, elles, rejetées par validate_data.
+DRIFT_THRESHOLD = 0.5  # écart de médiane toléré, en nombre d'écarts-types du train
+MIN_ROWS_DRIFT = 100   # en dessous, la médiane d'un lot est trop instable pour juger une dérive
+
+
+def check_input(X_train, X):
+    """Retourne la liste des alertes sur un lot de transactions X (liste vide = rien à signaler)."""
+    alerts = []
+
+    # Alerte 1 : montants supérieurs au maximum vu à l'entraînement
+    max_amount = X_train["Amount"].max()
+    n_extreme = int((X["Amount"] > max_amount).sum())
+    if n_extreme > 0:
+        alerts.append(f"Amount hors plage d'entraînement : {n_extreme} transaction(s) > {max_amount:.2f}")
+
+    # Alerte 2 : dérive de distribution (médiane d'une variable éloignée de celle du train).
+    # La médiane est utilisée plutôt que la moyenne : une seule valeur extrême ne la déplace pas.
+    if len(X) >= MIN_ROWS_DRIFT:
+        for col in FEATURES:
+            ecart = abs(X[col].median() - X_train[col].median()) / X_train[col].std()
+            if ecart > DRIFT_THRESHOLD:
+                alerts.append(f"Dérive possible sur {col} : médiane à {ecart:.2f} écart-type du train")
+
+    return alerts
+
+
 def preprocess_data(df, require_target=True):
     """Valide puis prépare les données ; retourne (X, y), y = None sans cible."""
     validate_data(df, require_target)
