@@ -23,7 +23,7 @@ import pandas as pd
 import pytest
 
 from src.data import FEATURES, TARGET, preprocess_data, split_data, validate_data
-from src.train import MODELS, evaluate_model, predict_fraud, train_model
+from src.train import MODELS, choose_threshold, evaluate_model, predict_fraud, train_model
 
 DATASET = Path(__file__).resolve().parent.parent / "data" / "raw" / "creditcard.csv"
 
@@ -307,6 +307,49 @@ class TestEvaluateModel:
         m = evaluate_model(y_true, y_pred, np.zeros(100))
         assert m["accuracy"] == 0.99
         assert m["recall"] == 0
+        
+    def test_fpr_fnr(self):
+        # 3 normales dont 1 signalée à tort ; 2 fraudes dont 1 manquée
+        y_true = np.array([0, 0, 0, 1, 1])
+        y_pred = np.array([0, 1, 0, 1, 0])
+        m = evaluate_model(y_true, y_pred, y_pred.astype(float))
+        assert m["fpr"] == 1 / 3  # FP / (FP + TN) = 1 / 3
+        assert m["fnr"] == 1 / 2  # FN / (FN + TP) = 1 / 2
+
+    def test_fpr_fnr_nuls_si_parfait(self):
+        y = np.array([0, 0, 1, 1])
+        m = evaluate_model(y, y, y.astype(float))
+        assert m["fpr"] == 0
+        assert m["fnr"] == 0
+
+
+# =============================================================================
+# choose_threshold : seuil réglé sur la validation (T11)
+# =============================================================================
+class TestChooseThreshold:
+
+    # 4 normales et 4 fraudes ; la normale à 0.6 est plus « suspecte » que la fraude à 0.4
+    y_true = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+    y_proba = np.array([0.1, 0.2, 0.3, 0.6, 0.4, 0.7, 0.8, 0.9])
+
+    def test_rappel_minimal_atteint(self):
+        threshold = choose_threshold(self.y_true, self.y_proba, min_recall=0.75)
+        y_pred = (self.y_proba >= threshold).astype(int)
+        assert evaluate_model(self.y_true, y_pred, self.y_proba)["recall"] >= 0.75
+
+    def test_meilleure_precision_retenue(self):
+        # Rappel 0.75 : seuil 0.7 (3 fraudes, 0 fausse alerte) plutôt que 0.6 (1 fausse alerte)
+        assert choose_threshold(self.y_true, self.y_proba, min_recall=0.75) == 0.7
+
+    def test_rappel_total_impose_un_seuil_plus_bas(self):
+        # Rappel 1 : il faut descendre à 0.4 pour attraper la fraude la moins suspecte
+        assert choose_threshold(self.y_true, self.y_proba, min_recall=1.0) == 0.4
+
+    def test_aucun_seuil_possible(self):
+        # Probabilités toutes nulles : aucune fraude n'est jamais détectée
+        with pytest.raises(ValueError, match="Aucun seuil"):
+            choose_threshold(self.y_true, np.zeros(8))
+
 
 
 # =============================================================================
