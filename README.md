@@ -16,7 +16,6 @@ notebooks/           exploration, évaluation, robustesse, biais, performance, n
 data/                données (non versionnées, voir data/README.md)
 models/              modèle sauvegardé et son empreinte
 reports/             métriques, rapports de tests, preuves
-docs/                plan de test et rapports (Word)
 ```
 
 ## Installation
@@ -57,7 +56,7 @@ Les rapports des tests sont écrits dans `reports/junit.xml` et `reports/coverag
 | PR-AUC | 0,819 | indicateur |
 | P95 de latence (API) | 24,6 ms | < 100 ms ✅ |
 
-**Décision de qualification : modèle non accepté en l'état**, le critère de rappel n'étant pas atteint. Les limites (peu de fraudes, surapprentissage, données anonymisées de 2013, absence d'attributs démographiques) sont détaillées dans les rapports du dossier `docs/`.
+**Décision de qualification : modèle non accepté en l'état**, le critère de rappel n'étant pas atteint. Principales limites : peu de fraudes, surapprentissage, données anonymisées de 2013, absence d'attributs démographiques.
 
 ## Intégration continue
 
