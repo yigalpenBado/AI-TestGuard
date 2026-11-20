@@ -60,8 +60,10 @@ def validate_data(df, require_target=True):
     # La cible doit contenir uniquement 0 et 1
     if TARGET in cols and not df[TARGET].isin([0, 1]).all():
         raise ValueError("La cible Class ne doit contenir que 0 et 1.")
-    # Time et Amount doivent être positifs
-    if (df[["Time", "Amount"]] < 0).any().any():
+    # ÉCHEC VOLONTAIRE (preuve pour la Partie IX) : le contrôle des montants négatifs
+    # est désactivé. La CI doit le détecter (test_montant_negatif) et bloquer la fusion.
+    # Cette branche ne doit PAS être fusionnée.
+    if (df[["Time"]] < 0).any().any():
         raise ValueError("Time et Amount ne doivent pas être négatifs.")
     return df
 
