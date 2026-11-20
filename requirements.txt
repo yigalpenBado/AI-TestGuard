@@ -7,3 +7,4 @@ seaborn==0.13.2
 pytest==9.2.0
 pytest-cov==7.1.0
 hypothesis==6.170.16
+fairlearn==0.15.0
