@@ -129,13 +129,14 @@ print(f"Mémoire du processus après prédiction de 10 000 transactions : {rss_p
 ## Comparaison aux seuils d'acceptation (justifiés dans le rapport)
 SEUILS = {"p95_prediction_isolee_ms": 50, "p95_requete_api_ms": 100,
           "debit_min_tps": 100, "taille_modele_max_mo": 50, "memoire_max_mo": 500}
-verdicts = {
+verdicts = {  # bool() : sinon numpy les enregistre comme 1.0 dans le JSON
     "p95_prediction_isolee_ms": latence["prediction_isolee"]["p95_ms"] < SEUILS["p95_prediction_isolee_ms"],
     "p95_requete_api_ms": latence["requete_api"]["p95_ms"] < SEUILS["p95_requete_api_ms"],
     "debit_min_tps": debit[1] >= SEUILS["debit_min_tps"],  # une transaction à la fois (cas réel)
     "taille_modele_max_mo": taille_modele_mo < SEUILS["taille_modele_max_mo"],
     "memoire_max_mo": rss_prediction < SEUILS["memoire_max_mo"],
 }
+verdicts = {k: bool(v) for k, v in verdicts.items()}
 for k, ok in verdicts.items():
     print(f"{k:<26} seuil {SEUILS[k]:>5} : {'OK' if ok else 'NON RESPECTÉ'}")
 
