@@ -1,45 +1,29 @@
-"""Entraînement, prédiction et évaluation du modèle de détection de fraude.
+"""Entraînement du modèle de détection de fraude et pipeline complet.
 
 - T09 : le scaler fait partie du Pipeline, il est donc ajusté sur le train uniquement ;
-- T05 : le modèle est choisi sur la validation ; le test ne sert qu'à l'évaluation finale.
-"""
+- T05 : le modèle et le seuil sont choisis sur la validation ; le test ne sert qu'à l'évaluation finale.
 
+Lancement depuis la racine du projet : python app/training.py [--save-baseline]
+"""
 import json
+import sys
 from pathlib import Path
 
 import joblib
-import pandas as pd
-
-# Modèles de classification adaptés au déséquilibre (T10)
-from sklearn.linear_model import LogisticRegression
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.ensemble import RandomForestClassifier
-
-# Métriques adaptées au déséquilibre (T10)
-from sklearn.metrics import (
-    accuracy_score,
-    average_precision_score,
-    confusion_matrix,
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
 from sklearn.base import clone
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import precision_score, recall_score
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.tree import DecisionTreeClassifier
 
-# Racine du projet ajoutée au chemin d'import : permet « python src/train.py »,
-# le bouton Run de VS Code et l'exécution cellule par cellule.
-import sys
-
-ROOT = (
-    Path(__file__).resolve().parent.parent
-    if "__file__" in globals()
-    else Path.cwd().parent
-)
+# Racine du projet ajoutée au chemin d'import : permet « python app/training.py »
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from src.data import FEATURES, SEED, preprocess_data, split_data, validate_data
+from app.evaluation import REGRESSION_TOLERANCE, compare_to_baseline, describe_version, evaluate_model  # noqa: E402
+from app.prediction import load_model, predict_fraud, sha256_of  # noqa: E402
+from app.preprocessing import SEED, load_data, preprocess_data, split_data  # noqa: E402
 
 # Nous utiliserons le SEED 42 pour la reproductibilité des résultats (T06)
 # class_weight="balanced" : les fraudes (0,17 %) pèsent autant que les transactions normales
@@ -61,7 +45,7 @@ MODELS = {
 }
 
 # Entrainement du modèle.
-# Nous utilisons clone() pour créer une copie neuve du modèle à chaque entraînement, 
+# Nous utilisons clone() pour créer une copie neuve du modèle à chaque entraînement,
 # afin d'éviter que les modèles partagent des paramètres internes (T09).
 # Nous entrainon les modeles suivants : la regression logistique, l'arbre de décision et la forêt aléatoire.
 def train_model(X, y, model_name="logistic_regression"):
@@ -72,38 +56,6 @@ def train_model(X, y, model_name="logistic_regression"):
     return clone(MODELS[model_name]).fit(
         X, y
     )  # clone : copie neuve à chaque entraînement
-
-# Apres l'entrainement, nous pouvons prédire les fraudes sur un jeu de données donné.
-# Une validation est effectuée pour vérifier que les données sont valides (T12).
-# avant de retourner les prédictions, nous calculons les probabilités de fraude et appliquons un seuil pour obtenir des décisions binaires (0/1).
-def predict_fraud(model, X, threshold=0.5):
-    """Retourne (décisions 0/1, probabilités de fraude). Rejette une entrée invalide (T12)."""
-    validate_data(X, require_target=False)
-    y_proba = model.predict_proba(X[FEATURES])[:, 1]
-    return (y_proba >= threshold).astype(int), y_proba
-
-# Après l'entrainement et la prédiction, nous pouvons évaluer les performances du modèle.
-def evaluate_model(y_true, y_pred, y_proba):
-    """Métriques adaptées au déséquilibre (T10) ; l'accuracy n'est donnée qu'à titre indicatif."""
-    tn, fp, fn, tp = confusion_matrix(y_true, y_pred, labels=[0, 1]).ravel()
-    # Taux de faux positifs : transactions normales signalées à tort comme fraudes
-    fpr = fp / (fp + tn) if (fp + tn) > 0 else 0.0
-    # Taux de faux négatifs : fraudes réelles non détectées
-    fnr = fn / (fn + tp) if (fn + tp) > 0 else 0.0
-    return {
-        "fpr": float(fpr),
-        "fnr": float(fnr),
-        "recall": recall_score(y_true, y_pred, zero_division=0),
-        "precision": precision_score(y_true, y_pred, zero_division=0),
-        "f1": f1_score(y_true, y_pred, zero_division=0),
-        "pr_auc": average_precision_score(y_true, y_proba),
-        "roc_auc": roc_auc_score(y_true, y_proba),
-        "accuracy": accuracy_score(y_true, y_pred),
-        "tn": int(tn),
-        "fp": int(fp),
-        "fn": int(fn),
-        "tp": int(tp),
-    }
 
 
 # Le seuil de décision est choisi sur la VALIDATION, jamais sur le test (T05, T11).
@@ -141,30 +93,13 @@ def choose_threshold(y_true, y_proba, min_recall=0.75):
     return best_threshold
 
 # =============================================================================
-# Mise en oeuvre du pipeline complet : chargement, prétraitement, découpage, 
-# entraînement, choix du seuil sur la validation, évaluation finale sur le test 
+# Mise en oeuvre du pipeline complet : chargement, prétraitement, découpage,
+# entraînement, choix du seuil sur la validation, évaluation finale sur le test
 # et sauvegarde du modèle et des métriques.
 # =============================================================================
-# Chargement des données : erreurs explicites si le fichier est absent ou vide.
-def load_data(path):
-    """Lit le fichier CSV des transactions."""
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"Fichier de données introuvable : {path}")
-    df = pd.read_csv(path)
-    if df.empty:
-        raise ValueError(f"Le fichier de données est vide : {path}")
-    return df
-
 
 # Sauvegarde du modèle avec son seuil : le seuil choisi sur la validation
 # doit être réutilisé tel quel après rechargement.
-def sha256_of(path):
-    """Empreinte SHA-256 d'un fichier."""
-    import hashlib
-    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
-
-
 def save_model(model, threshold, path):
     """Sauvegarde le modèle et son seuil (joblib), plus son empreinte dans <fichier>.sha256."""
     path = Path(path)
@@ -172,27 +107,6 @@ def save_model(model, threshold, path):
     joblib.dump({"model": model, "threshold": threshold}, path)
     Path(str(path) + ".sha256").write_text(sha256_of(path))
 
-
-# Rechargement du modèle sauvegardé : erreurs explicites si le fichier est absent ou invalide.
-def load_model(path):
-    """Recharge le modèle et son seuil. Retourne (model, threshold)."""
-    path = Path(path)
-    if not path.exists():
-        raise FileNotFoundError(f"Fichier modèle introuvable : {path}")
-    # Sécurité : joblib.load peut exécuter du code contenu dans le fichier.
-    # On vérifie donc l'empreinte AVANT de charger : un fichier modifié est refusé.
-    empreinte = Path(str(path) + ".sha256")
-    if not empreinte.exists():
-        raise ValueError(f"Empreinte du modèle manquante : {empreinte}")
-    if sha256_of(path) != empreinte.read_text().strip():
-        raise ValueError(f"Intégrité du modèle non vérifiée (fichier modifié) : {path}")
-    try:
-        saved = joblib.load(path)
-    except Exception as error:
-        raise ValueError(f"Fichier modèle illisible : {path}") from error
-    if not isinstance(saved, dict) or "model" not in saved or "threshold" not in saved:
-        raise ValueError(f"Fichier modèle invalide (modèle ou seuil manquant) : {path}")
-    return saved["model"], saved["threshold"]
 
 
 # Verification sur la validation à 0.85, soit une marge de 10 points au-dessus de
@@ -205,83 +119,6 @@ VAL_MIN_RECALL = 0.85
 TOLERANCE = 1e-12
 
 
-# Description d'une version du modèle (Partie VI) : tout ce qu'il faut pour la comparer
-# à une autre version. Sert à créer la référence (baseline) et la version courante.
-def describe_version(model, model_name, threshold, val_metrics, csv_path, X, y, y_val):
-    """Retourne un dictionnaire : code, modèle, bibliothèques, graine, seuil, métriques, données."""
-    import hashlib
-    import subprocess
-    from datetime import datetime
-
-    import numpy
-    import sklearn
-
-    # Version du code : commit git courant (« inconnu » hors dépôt git),
-    # suivi de « -modifie » si du code n'est pas commité (la version n'est alors pas traçable)
-    try:
-        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
-                                capture_output=True, text=True, check=True).stdout.strip()
-        changes = subprocess.run(["git", "status", "--porcelain", "src"], cwd=ROOT,
-                                 capture_output=True, text=True, check=True).stdout.strip()
-        if changes:
-            commit += "-modifie"
-    except Exception:
-        commit = "inconnu"
-
-    # Empreinte du fichier de données : change si une seule valeur du CSV change
-    sha256 = hashlib.sha256(Path(csv_path).read_bytes()).hexdigest()
-
-    return {
-        "date": datetime.now().isoformat(timespec="seconds"),
-        "code": {"commit": commit},
-        "model": {"name": model_name, "params": model.named_steps["model"].get_params()},
-        "libraries": {"scikit-learn": sklearn.__version__, "pandas": pd.__version__,
-                      "numpy": numpy.__version__, "joblib": joblib.__version__},
-        "seed": SEED,
-        "threshold": threshold,
-        "validation_metrics": val_metrics,
-        "data": {"sha256": sha256, "n_rows": len(X), "n_frauds": int(y.sum()),
-                 "n_validation": len(y_val), "n_validation_frauds": int(y_val.sum())},
-    }
-
-
-# Comparaison d'une nouvelle version à la référence (Partie VI, T14)
-REGRESSION_TOLERANCE = 0.02  # baisse maximale tolérée (plan de test, T14)
-
-
-def compare_to_baseline(baseline, current, tolerance=REGRESSION_TOLERANCE):
-    """Compare deux versions sur la validation. Retourne (décision, raisons).
-
-    - « rejeter »    : le rappel ou la PR-AUC baisse de plus de la tolérance ;
-    - « investiguer » : la précision baisse de plus de la tolérance, ou les données ou
-                        les bibliothèques ont changé (la comparaison n'est plus fiable) ;
-    - « accepter »   : sinon.
-    """
-    rejeter = []
-    investiguer = []
-
-    # Métriques critiques : une baisse au-delà de la tolérance est une régression
-    for metric in ("recall", "pr_auc"):
-        baisse = baseline["validation_metrics"][metric] - current["validation_metrics"][metric]
-        if baisse > tolerance:
-            rejeter.append(f"{metric} en baisse de {baisse:.4f} (> {tolerance})")
-
-    # Précision : une baisse signifie plus de fausses alertes, à analyser
-    baisse = baseline["validation_metrics"]["precision"] - current["validation_metrics"]["precision"]
-    if baisse > tolerance:
-        investiguer.append(f"precision en baisse de {baisse:.4f} (> {tolerance})")
-
-    # Contexte : si les données ou les bibliothèques changent, la comparaison n'est plus fiable
-    if baseline["data"]["sha256"] != current["data"]["sha256"]:
-        investiguer.append("jeu de données différent de celui de la référence")
-    if baseline["libraries"] != current["libraries"]:
-        investiguer.append("versions des bibliothèques différentes de la référence")
-
-    if rejeter:
-        return "rejeter", rejeter + investiguer
-    if investiguer:
-        return "investiguer", investiguer
-    return "accepter", ["aucune dégradation au-delà de la tolérance"]
 
 
 if __name__ == "__main__":

@@ -1,4 +1,6 @@
-"""Contrôle, préparation et découpage des données (T01, T02, T03, T08, T12)."""
+"""Chargement, contrôle, préparation et découpage des données (T01, T02, T03, T08, T12)."""
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -20,8 +22,23 @@ for i in range(1, 29):
 FEATURES.append("Amount")
 
 
+# Chargement des données : erreurs explicites si le fichier est absent ou vide.
+def load_data(path):
+    """Lit le fichier CSV des transactions."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"Fichier de données introuvable : {path}")
+    df = pd.read_csv(path)
+    if df.empty:
+        raise ValueError(f"Le fichier de données est vide : {path}")
+    return df
+
+
 def validate_data(df, require_target=True):
-    """Contrôle le schéma et les types ; lève une exception ValueError si les donnees ne sont pas conformes au contrat."""
+    """Contrôle le schéma et les types.
+
+    Lève une exception ValueError si les données ne sont pas conformes au contrat.
+    """
     # Le dataframe de doit pas etre vive, cela est un prealable à la validation du schéma et des types
     if not isinstance(df, pd.DataFrame) or df.empty:
         raise ValueError("Les données doivent être un DataFrame non vide.")
@@ -89,5 +106,7 @@ def preprocess_data(df, require_target=True):
 def split_data(X, y, seed=SEED):
     """Découpage stratifié 60/20/20 (T08). Les doublons ont été retirés par preprocess_data."""
     X_tmp, X_test, y_tmp, y_test = train_test_split(X, y, test_size=0.2, stratify=y, random_state=seed)
-    X_train, X_val, y_train, y_val = train_test_split(X_tmp, y_tmp, test_size=0.25, stratify=y_tmp, random_state=seed)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X_tmp, y_tmp, test_size=0.25, stratify=y_tmp, random_state=seed
+    )
     return X_train, X_val, X_test, y_train, y_val, y_test

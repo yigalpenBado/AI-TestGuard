@@ -1,0 +1,15 @@
+# Configuration de Ruff (vérification du style du code)
+line-length = 110
+target-version = "py312"
+exclude = [".venv", "reports", "docs", "data", "models"]
+
+[lint]
+# E / W : style PEP 8 ; F : erreurs (imports inutilisés, variables non définies) ; I : ordre des imports
+select = ["E", "F", "W", "I"]
+
+[lint.per-file-ignores]
+# Imports placés après sys.path.insert(...) : nécessaire pour lancer ces fichiers
+# directement (python app/training.py, uvicorn, exécution cellule par cellule des notebooks)
+"notebooks/*" = ["E402"]
+"api/main.py" = ["E402"]
+"app/training.py" = ["E402"]

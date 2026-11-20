@@ -9,11 +9,12 @@ import pandas as pd
 # Racine du projet (fonctionne en script ou en mode cellules)
 ROOT = Path(__file__).resolve().parent.parent if "__file__" in globals() else Path.cwd().parent
 sys.path.insert(0, str(ROOT))
-from src.data import SEED, preprocess_data, split_data
-from src.train import evaluate_model, load_data, load_model, predict_fraud
+from app.evaluation import evaluate_model
+from app.prediction import load_model, predict_fraud
+from app.preprocessing import SEED, load_data, preprocess_data, split_data
 
 #%%
-## Chargement du modèle sauvegardé et des données (mêmes règles que src/train.py)
+## Chargement du modèle sauvegardé et des données (mêmes règles que app/training.py)
 model, threshold = load_model(ROOT / "models" / "model.pkl")
 X, y = preprocess_data(load_data(ROOT / "data" / "raw" / "creditcard.csv"))
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
@@ -89,7 +90,8 @@ for nom, X_p in scenarios.items():
     })
 
 table = pd.DataFrame(rows).set_index("scénario")
-print(f"Référence (sans perturbation) : rappel {ref['recall']:.4f}, précision {ref['precision']:.4f}, FPR {ref['fpr']:.5f}\n")
+print(f"Référence (sans perturbation) : rappel {ref['recall']:.4f}, "
+      f"précision {ref['precision']:.4f}, FPR {ref['fpr']:.5f}\n")
 print(table.round(5).to_string())
 (ROOT / "reports").mkdir(exist_ok=True)
 table.round(5).to_csv(ROOT / "reports" / "robustesse.csv")

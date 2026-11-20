@@ -2,9 +2,9 @@
 ## Import des bibliothèques nécessaires
 from pathlib import Path
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Nous recuperons le context du projet pour pouvoir importer les fonctions de train.py
@@ -13,10 +13,11 @@ DATA = ROOT / "data"
 
 #%%
 ## Nous importons les fonctions de contrôle
-# et de préparation des données (définies dans src/data.py, testées dans tests/)
+# et de préparation des données (définies dans app/preprocessing.py, testées dans tests/)
 import sys
+
 sys.path.insert(0, str(ROOT))
-from src.data import FEATURES, TARGET, preprocess_data
+from app.preprocessing import FEATURES, TARGET, preprocess_data
 
 #%%
 ## Lecture du jeu de données
@@ -29,7 +30,7 @@ print(df.head())
 print("\nDimensions :")
 print(df.shape)
 # %% [Markdown]
-#  Nous Observons 284 807 transactions  
+#  Nous Observons 284 807 transactions
 # 31 colonnes : Time, V1 à V28, Amount, Class
 
 #%% [markdown]
@@ -62,9 +63,9 @@ print("Time négatifs :", (df["Time"] < 0).sum())
 n_dup = df.duplicated().sum()
 print(f"\nLignes dupliquées : {n_dup}")
 print("Dont fraudes :", df[df.duplicated()]["Class"].sum())
-# %% 
+# %%
 # Nous Observons 1081 doublons, dont 19 fraudes.
-#  Règle documentée : les doublons seront supprimés 
+#  Règle documentée : les doublons seront supprimés
 # avant le découpage train/val/test
 
 #%%
@@ -79,14 +80,14 @@ print(df[["Time", "Amount", "V1", "V2", "V3"]].describe())
 # Les variables V1 à V28 étant anonymisées, elles ne doivent pas être interprétées métier.
 
 #%%
-## Répartition de la cible 
+## Répartition de la cible
 ## Nous observons que le jeu est fortement déséquilibré
 print("\nRépartition de Class :")
 print(df["Class"].value_counts())
 print(f"Taux de fraude : {df['Class'].mean():.4%}")
 
 #%% [markdown ]
-# Environ 0,17 % de fraudes 
+# Environ 0,17 % de fraudes
 # un modèle qui prédit dans le plus grande majorité des cas « normal » aurait 99,8 % d'accuracy.
 #  L'accuracy seule n'est donc pas un indicateur pertinent (T10).
 
@@ -126,7 +127,8 @@ plt.show()
 # - Nous observons des doublons qui doivent être supprimés avant le découpage ;
 # - Le découpage sera stratifié train/val/test (60/20/20, random_state=42) ;
 # - La standardisation de Time et Amount ajustée sur le train uniquement ;
-# - Au vu de l'accuracy, nous devons utiliser des métriques adaptées au déséquilibre (rappel, précision, PR-AUC).
+# - Au vu de l'accuracy, nous devons utiliser des métriques adaptées au déséquilibre
+#   (rappel, précision, PR-AUC).
 
 #%%
 ## Application des fonctions validate_data et preprocess_data au jeu de données
@@ -134,7 +136,8 @@ X, y = preprocess_data(df)  # valide le schéma, supprime les doublons, sépare 
 assert y is not None
 print(f"\nAprès prétraitement : X {X.shape}, fraudes : {y.sum()}")
 # %%
-# Après le prétraitement, nous pouvons passer à l'exploration des données (EDA) pour mieux comprendre les relations entre les variables et la cible.
+# Après le prétraitement, nous pouvons passer à l'exploration des données (EDA)
+# pour mieux comprendre les relations entre les variables et la cible.
 
 #%%
 ## EDA 1 — Variables les plus discriminantes

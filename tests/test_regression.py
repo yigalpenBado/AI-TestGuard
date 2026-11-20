@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from src.data import preprocess_data, split_data
-from src.train import (compare_to_baseline, describe_version, evaluate_model, load_data,
-                       load_model, predict_fraud)
+from app.evaluation import compare_to_baseline, describe_version, evaluate_model
+from app.prediction import load_model, predict_fraud
+from app.preprocessing import load_data, preprocess_data, split_data
 
 ROOT = Path(__file__).resolve().parent.parent
 DATASET = ROOT / "data" / "raw" / "creditcard.csv"
@@ -55,7 +55,8 @@ def test_rejeter():
 
 
 def test_investiguer():
-    decision, reasons = compare_to_baseline(REFERENCE, version(precision=0.80))        # plus de fausses alertes
+    # plus de fausses alertes
+    decision, reasons = compare_to_baseline(REFERENCE, version(precision=0.80))
     assert decision == "investiguer" and "precision" in reasons[0]
     decision, reasons = compare_to_baseline(REFERENCE, version(sha256="autre"))        # autres données
     assert decision == "investiguer" and "données" in reasons[0]

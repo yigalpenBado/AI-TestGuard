@@ -27,8 +27,8 @@ import sklearn
 warnings.filterwarnings("ignore")
 ROOT = Path(__file__).resolve().parent.parent if "__file__" in globals() else Path.cwd().parent
 sys.path.insert(0, str(ROOT))
-from src.data import preprocess_data, split_data
-from src.train import load_data, load_model, predict_fraud
+from app.prediction import load_model, predict_fraud
+from app.preprocessing import load_data, preprocess_data, split_data
 
 MODEL_PATH = ROOT / "models" / "model.pkl"
 process = psutil.Process()
@@ -92,6 +92,7 @@ def resume(temps):
 #%%
 ## Latence d'une transaction : modèle seul, prédiction isolée, requête API
 from fastapi.testclient import TestClient
+
 from api.main import app
 
 client = TestClient(app)

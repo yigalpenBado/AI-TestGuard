@@ -13,8 +13,8 @@ from sklearn.metrics import precision_score, recall_score
 
 ROOT = Path(__file__).resolve().parent.parent if "__file__" in globals() else Path.cwd().parent
 sys.path.insert(0, str(ROOT))
-from src.data import SEED, preprocess_data, split_data
-from src.train import load_data, load_model, predict_fraud
+from app.prediction import load_model, predict_fraud
+from app.preprocessing import SEED, load_data, preprocess_data, split_data
 
 #%%
 ## Modèle sauvegardé et jeu de test

@@ -11,9 +11,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent if "__file__" in globals() else Path.cwd().parent
 sys.path.insert(0, str(ROOT))
 from sklearn.base import clone
-from src.data import preprocess_data, split_data
-from src.train import (MODELS, VAL_MIN_RECALL, choose_threshold, compare_to_baseline,
-                       describe_version, evaluate_model, load_data, predict_fraud)
+
+from app.evaluation import compare_to_baseline, describe_version, evaluate_model
+from app.prediction import predict_fraud
+from app.preprocessing import load_data, preprocess_data, split_data
+from app.training import MODELS, VAL_MIN_RECALL, choose_threshold
 
 CSV = ROOT / "data" / "raw" / "creditcard.csv"
 baseline = json.loads((ROOT / "reports" / "baseline.json").read_text())
@@ -53,7 +55,8 @@ print(f"\nDécision : {decision.upper()} — {'; '.join(reasons)}")
 ## Enregistrement de la comparaison (preuve pour le rapport)
 with open(ROOT / "reports" / "non_regression_max_depth10.json", "w") as f:
     json.dump({
-        "baseline": {"commit": baseline["code"]["commit"], "max_depth": baseline["model"]["params"]["max_depth"],
+        "baseline": {"commit": baseline["code"]["commit"],
+                     "max_depth": baseline["model"]["params"]["max_depth"],
                      "threshold": baseline["threshold"], "validation": baseline["validation_metrics"]},
         "candidate": {"commit": current["code"]["commit"], "max_depth": 10, "threshold": threshold,
                       "validation": val_metrics, "train": train_metrics},

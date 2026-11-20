@@ -17,8 +17,8 @@ from pydantic import ConfigDict, Field, create_model
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-from src.data import FEATURES
-from src.train import load_model, predict_fraud
+from app.prediction import load_model, predict_fraud
+from app.preprocessing import FEATURES
 
 # Modèle et seuil chargés une seule fois, au démarrage
 model, threshold = load_model(ROOT / "models" / "model.pkl")
@@ -37,6 +37,28 @@ Transaction = create_model(
 )
 
 app = FastAPI(title="Détection de fraude")
+
+
+# Point d'entrée : présentation de l'API
+@app.get("/")
+def root():
+    return {"message": "API de détection de fraude bancaire"}
+
+
+# Santé de l'API : utilisée pour vérifier que le service répond
+@app.get("/health")
+def health():
+    return {"status": "UP"}
+
+
+# Informations sur le modèle chargé (sans donnée sensible)
+@app.get("/model/info")
+def model_info():
+    return {
+        "model": type(model.named_steps["model"]).__name__,
+        "threshold": threshold,
+        "features": FEATURES,
+    }
 
 
 # Journal : on enregistre la DÉCISION, jamais le contenu de la transaction

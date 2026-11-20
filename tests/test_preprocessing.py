@@ -5,27 +5,28 @@ Fonctions testées :
 - preprocess_data(df)                     : préparation des variables ;
 - split_data(X, y)                        : découpage train/val/test ;
 - train_model(X, y)                       : entraînement du pipeline ;
-- predict_fraud(model, X)                 : production des prédictions ;
 - evaluate_model(y_true, y_pred, y_proba) : calcul des métriques.
 
 Exigences du plan de test couvertes :
-T01 colonnes présentes, T02 types, T03 valeurs finies, T04 probabilité valide,
+T01 colonnes présentes, T02 types, T03 valeurs finies,
 T06 reproductibilité, T08 partitions disjointes et stratifiées, T09 scaler ajusté
-sur le train, T10 métriques adaptées au déséquilibre, T12 entrée invalide rejetée.
+sur le train, T10 métriques adaptées au déséquilibre, T11 seuil choisi sur la validation.
+
+Les tests de prédiction (predict_fraud, load_model) sont dans tests/test_prediction.py.
 
 Chaque test vérifie un comportement attendu (valeur, message d'erreur, dimension),
 et non simplement l'absence d'exception.
 """
 from pathlib import Path
 
-import joblib
 import numpy as np
 import pandas as pd
 import pytest
 
-from src.data import FEATURES, TARGET, preprocess_data, split_data, validate_data
-from src.train import (MODELS, choose_threshold, evaluate_model, load_data, load_model,
-                       predict_fraud, save_model, sha256_of, train_model)
+from app.evaluation import evaluate_model
+from app.prediction import predict_fraud
+from app.preprocessing import FEATURES, TARGET, load_data, preprocess_data, split_data, validate_data
+from app.training import MODELS, choose_threshold, train_model
 
 DATASET = Path(__file__).resolve().parent.parent / "data" / "raw" / "creditcard.csv"
 
@@ -100,7 +101,7 @@ class TestPreprocessData:
         assert X.shape == (len(valid_df), len(FEATURES))
         assert len(y) == len(X)
         assert list(X.columns) == FEATURES
-        assert (X.dtypes == float).all()
+        assert all(pd.api.types.is_float_dtype(t) for t in X.dtypes)
         assert np.isfinite(X.to_numpy()).all()
         assert set(y.unique()) <= {0, 1}
 
@@ -167,40 +168,6 @@ class TestTrainModel:
 
 
 # =============================================================================
-# predict_fraud : production des prédictions
-# =============================================================================
-class TestPredictFraud:
-
-    @pytest.fixture
-    def model(self, train_data):
-        return train_model(*train_data)
-
-    def test_probabilites_valides(self, model, train_data):  # T04
-        X = train_data[0]
-        y_pred, y_proba = predict_fraud(model, X)
-        assert len(y_pred) == len(y_proba) == len(X)
-        assert ((y_proba >= 0) & (y_proba <= 1)).all()
-        assert set(np.unique(y_pred)) <= {0, 1}
-        assert len(predict_fraud(model, X.head(1))[0]) == 1  # une seule observation
-
-    def test_effet_du_seuil(self, model, train_data):  # valeurs limites
-        X = train_data[0]
-        assert predict_fraud(model, X, threshold=0.0)[0].sum() == len(X)  # tout est fraude
-        assert predict_fraud(model, X, threshold=1.01)[0].sum() == 0      # rien n'est fraude
-        n_bas = predict_fraud(model, X, threshold=0.1)[0].sum()
-        n_haut = predict_fraud(model, X, threshold=0.9)[0].sum()
-        assert n_bas >= n_haut                                            # seuil bas = plus d'alertes
-
-    def test_entree_invalide_rejetee(self, model, train_data):  # T12
-        with pytest.raises(ValueError, match="Colonnes manquantes"):
-            predict_fraud(model, train_data[0].drop(columns="Amount"))
-
-    def test_detecte_les_fraudes(self, model, train_data):
-        y_pred, y_proba = predict_fraud(model, train_data[0])
-        assert evaluate_model(train_data[1], y_pred, y_proba)["recall"] >= 0.8
-
-
-# =============================================================================
 # evaluate_model : métriques adaptées au déséquilibre (T10)
 # =============================================================================
 class TestEvaluateModel:
@@ -249,9 +216,9 @@ class TestChooseThreshold:
 
 
 # =============================================================================
-# load_data, save_model, load_model : chargement et sauvegarde
+# load_data : chargement des données
 # =============================================================================
-class TestChargementSauvegarde:
+class TestLoadData:
 
     def test_load_data(self, valid_df, tmp_path):
         valid_df.to_csv(tmp_path / "data.csv", index=False)
@@ -261,25 +228,6 @@ class TestChargementSauvegarde:
         pd.DataFrame(columns=FEATURES).to_csv(tmp_path / "vide.csv", index=False)
         with pytest.raises(ValueError, match="vide"):
             load_data(tmp_path / "vide.csv")
-
-    def test_save_puis_load_model(self, train_data, tmp_path):
-        save_model(train_model(*train_data), 0.4, tmp_path / "model.pkl")
-        model, threshold = load_model(tmp_path / "model.pkl")
-        assert threshold == 0.4
-        assert hasattr(model, "predict_proba")
-
-    def test_load_model_erreurs(self, train_data, tmp_path):
-        with pytest.raises(FileNotFoundError, match="introuvable"):
-            load_model(tmp_path / "absent.pkl")
-        (tmp_path / "corrompu.pkl").write_text("ceci n'est pas un modèle")
-        (tmp_path / "corrompu.pkl.sha256").write_text(sha256_of(tmp_path / "corrompu.pkl"))
-        with pytest.raises(ValueError, match="illisible"):
-            load_model(tmp_path / "corrompu.pkl")
-        joblib.dump(train_model(*train_data), tmp_path / "sans_seuil.pkl")  # modèle seul
-        (tmp_path / "sans_seuil.pkl.sha256").write_text(sha256_of(tmp_path / "sans_seuil.pkl"))
-        with pytest.raises(ValueError, match="invalide"):
-            load_model(tmp_path / "sans_seuil.pkl")
-
 
 # =============================================================================
 # Jeu de données réel (ignoré si le CSV est absent, par exemple en CI)

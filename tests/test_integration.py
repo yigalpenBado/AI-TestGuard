@@ -9,9 +9,10 @@ ils ne dépendent ni du vrai CSV ni du dossier models/.
 import numpy as np
 import pytest
 
-from src.data import FEATURES, TARGET, preprocess_data, split_data
-from src.train import (TOLERANCE, choose_threshold, evaluate_model, load_data, load_model,
-                       predict_fraud, save_model, sha256_of, train_model)
+from app.evaluation import evaluate_model
+from app.prediction import load_model, predict_fraud, sha256_of
+from app.preprocessing import FEATURES, TARGET, load_data, preprocess_data, split_data
+from app.training import TOLERANCE, choose_threshold, save_model, train_model
 
 
 @pytest.fixture(scope="module")

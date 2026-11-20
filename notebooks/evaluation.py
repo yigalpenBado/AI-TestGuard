@@ -3,8 +3,8 @@
 import sys
 from pathlib import Path
 
-import pandas as pd
 import matplotlib.pyplot as plt
+import pandas as pd
 from sklearn.metrics import (
     ConfusionMatrixDisplay,
     PrecisionRecallDisplay,
@@ -15,14 +15,16 @@ from sklearn.metrics import (
 # Racine du projet (fonctionne en script ou en mode cellules)
 ROOT = Path(__file__).resolve().parent.parent if "__file__" in globals() else Path.cwd().parent
 sys.path.insert(0, str(ROOT))
-from src.data import preprocess_data, split_data
-from src.train import MODELS, VAL_MIN_RECALL, choose_threshold, evaluate_model, predict_fraud, train_model
+from app.evaluation import evaluate_model
+from app.prediction import predict_fraud
+from app.preprocessing import preprocess_data, split_data
+from app.training import MODELS, VAL_MIN_RECALL, choose_threshold, train_model
 
 REPORTS = ROOT / "reports"
 REPORTS.mkdir(exist_ok=True)
 
 #%%
-## Chargement, prétraitement et découpage (mêmes règles que src/train.py)
+## Chargement, prétraitement et découpage (mêmes règles que app/training.py)
 X, y = preprocess_data(pd.read_csv(ROOT / "data" / "raw" / "creditcard.csv"))
 X_train, X_val, X_test, y_train, y_val, y_test = split_data(X, y)
 print(f"Train {len(X_train)} | Val {len(X_val)} | Test {len(X_test)}")

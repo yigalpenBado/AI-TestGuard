@@ -12,8 +12,9 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from hypothesis.extra.numpy import arrays
 
-from src.data import FEATURES, check_input, split_data
-from src.train import predict_fraud, train_model
+from app.prediction import predict_fraud
+from app.preprocessing import FEATURES, check_input, split_data
+from app.training import train_model
 
 
 # Modèle entraîné et jeux issus de train_data (tests/conftest.py), créés une fois pour le fichier

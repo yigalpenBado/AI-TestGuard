@@ -14,8 +14,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.main import app
-from src.data import FEATURES
-from src.train import load_model, save_model, train_model
+from app.prediction import load_model
+from app.preprocessing import FEATURES
+from app.training import save_model, train_model
 
 ROOT = Path(__file__).resolve().parent.parent
 client = TestClient(app)

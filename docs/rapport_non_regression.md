@@ -7,7 +7,7 @@
 | Séparer avant toute transformation apprise | Découpage d'abord ; le scaler est dans le Pipeline, ajusté sur le train uniquement (test automatisé T09). |
 | Jeux d'entraînement, de validation et de test | Découpage stratifié 60/20/20 avec la graine 42 : 170 235 / 56 745 / 56 746 transactions. |
 | Réglages sur les données autorisées | Le choix du modèle, le seuil de décision et la comparaison des versions se font sur la **validation**. |
-| Test réservé à l'évaluation finale | Dans le pipeline (`src/train.py`), le test n'est utilisé que pour l'évaluation finale du modèle retenu, avec le seuil choisi sur la validation. |
+| Test réservé à l'évaluation finale | Dans le pipeline (`app/training.py`), le test n'est utilisé que pour l'évaluation finale du modèle retenu, avec le seuil choisi sur la validation. |
 | Comparer entraînement et test | Voir ci-dessous. |
 
 **Surapprentissage de la référence** (forêt aléatoire, seuil 0,40) :
@@ -22,7 +22,7 @@ Le modèle détecte toutes les fraudes du train, mais seulement 75 % de celles d
 
 ## 2. Version de référence
 
-La référence est enregistrée dans `reports/baseline.json`. Elle n'est créée que sur demande explicite (`python src/train.py --save-baseline`) et n'est jamais écrasée automatiquement.
+La référence est enregistrée dans `reports/baseline.json`. Elle n'est créée que sur demande explicite (`python app/training.py --save-baseline`) et n'est jamais écrasée automatiquement.
 
 | Élément | Valeur |
 |---|---|
@@ -79,4 +79,4 @@ La version de référence est conservée en production (`models/model.pkl`), et 
 
 - **Faible nombre de fraudes en validation (94)** : une fraude représente environ 1 point de rappel. Les écarts observés sont réels, mais proches de la précision de mesure ; une validation croisée donnerait une comparaison plus stable.
 - **Une seule valeur testée** pour `max_depth`. D'autres réglages pourraient mieux réduire le surapprentissage, par exemple `min_samples_leaf`, ou une profondeur plus faible. Ils devront passer par la même procédure de comparaison.
-- **Le contrôle automatisé** (`tests/test_non_regression.py`) compare le modèle sauvegardé à la référence et échoue en cas de décision « rejeter ».
+- **Le contrôle automatisé** (`tests/test_regression.py`) compare le modèle sauvegardé à la référence et échoue en cas de décision « rejeter ».
