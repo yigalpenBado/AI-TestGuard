@@ -37,6 +37,15 @@ sha256sum data/raw/creditcard.csv
 - 284 807 transactions, dont 492 fraudes (0,17 %).
 - 1 081 lignes dupliquées, supprimées avant le découpage train / validation / test.
 
+## Dans GitHub Actions
+
+Le workflow `Pipeline complet` (`.github/workflows/complet.yml`) télécharge le fichier depuis Kaggle, puis vérifie son empreinte SHA-256. Il faut pour cela définir deux secrets dans le dépôt GitHub (*Settings > Secrets and variables > Actions*) :
+
+| Secret | Valeur |
+|---|---|
+| `KAGGLE_USERNAME` | nom d'utilisateur Kaggle |
+| `KAGGLE_KEY` | clé d'API Kaggle (*Kaggle > Settings > API > Create New Token*) |
+
 ## Sans le fichier
 
 Les tests qui ont besoin du vrai jeu de données (`TestVraiJeuDeDonnees`, `test_modele_actuel_sans_regression`) sont **ignorés** automatiquement : c'est le cas dans GitHub Actions. Tous les autres tests utilisent des données synthétiques (`tests/conftest.py`).

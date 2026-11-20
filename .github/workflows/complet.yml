@@ -1,0 +1,68 @@
+# Expériences coûteuses : entraînement complet, tests sur le vrai jeu de données,
+# mesures de robustesse et de performance. Déclenchées à la demande ou chaque lundi.
+# Le jeu de données est téléchargé depuis Kaggle : il faut définir les secrets
+# KAGGLE_USERNAME et KAGGLE_KEY (Settings > Secrets and variables > Actions).
+name: Pipeline complet
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 3 * * 1"   # chaque lundi à 3 h (UTC)
+
+permissions:
+  contents: read
+
+jobs:
+  complet:
+    name: Entraînement et tests complets
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+      KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+      MPLBACKEND: Agg
+
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v4
+
+      - name: Installation de Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Installation des dépendances
+        run: pip install -r requirements.txt kaggle==1.6.17
+
+      - name: Téléchargement du jeu de données (Kaggle)
+        run: |
+          if [ -z "$KAGGLE_USERNAME" ] || [ -z "$KAGGLE_KEY" ]; then
+            echo "::error::Secrets KAGGLE_USERNAME et KAGGLE_KEY manquants (voir data/README.md)"
+            exit 1
+          fi
+          kaggle datasets download -d mlg-ulb/creditcardfraud -p data/raw --unzip
+
+      - name: Vérification de l'intégrité du jeu de données
+        run: |
+          echo "76274b691b16a6c49d3f159c883398e03ccd6d1ee12d9d8ee38f4b4b98551a89  data/raw/creditcard.csv" \
+            | sha256sum --check
+
+      - name: Entraînement complet et contrôle de non-régression
+        run: python app/training.py
+
+      - name: Tous les tests (y compris sur le vrai jeu de données)
+        run: pytest -rs
+
+      - name: Mesures de robustesse et de performance
+        run: |
+          cd notebooks
+          python robustesse.py
+          python performance.py
+
+      - name: Publication des rapports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rapports-complets
+          path: reports/
