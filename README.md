@@ -62,3 +62,5 @@ Les rapports des tests sont écrits dans `reports/junit.xml` et `reports/coverag
 ## Intégration continue
 
 GitHub Actions (`.github/workflows/tests.yml`) exécute Ruff et pytest, avec un rapport de couverture, à chaque Pull Request et à chaque envoi sur `main`.
+
+===============================================================================================
