@@ -1,6 +1,6 @@
 {
   "baseline_commit": "f508122",
-  "current_commit": "f508122-modifie",
+  "current_commit": "02cf2c2-modifie",
   "tolerance": 0.02,
   "metrics": {
     "recall": {

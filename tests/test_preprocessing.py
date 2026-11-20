@@ -25,7 +25,7 @@ import pytest
 
 from src.data import FEATURES, TARGET, preprocess_data, split_data, validate_data
 from src.train import (MODELS, choose_threshold, evaluate_model, load_data, load_model,
-                       predict_fraud, save_model, train_model)
+                       predict_fraud, save_model, sha256_of, train_model)
 
 DATASET = Path(__file__).resolve().parent.parent / "data" / "raw" / "creditcard.csv"
 
@@ -272,9 +272,11 @@ class TestChargementSauvegarde:
         with pytest.raises(FileNotFoundError, match="introuvable"):
             load_model(tmp_path / "absent.pkl")
         (tmp_path / "corrompu.pkl").write_text("ceci n'est pas un modèle")
+        (tmp_path / "corrompu.pkl.sha256").write_text(sha256_of(tmp_path / "corrompu.pkl"))
         with pytest.raises(ValueError, match="illisible"):
             load_model(tmp_path / "corrompu.pkl")
         joblib.dump(train_model(*train_data), tmp_path / "sans_seuil.pkl")  # modèle seul
+        (tmp_path / "sans_seuil.pkl.sha256").write_text(sha256_of(tmp_path / "sans_seuil.pkl"))
         with pytest.raises(ValueError, match="invalide"):
             load_model(tmp_path / "sans_seuil.pkl")
 

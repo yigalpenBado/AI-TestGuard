@@ -11,7 +11,7 @@ import pytest
 
 from src.data import FEATURES, TARGET, preprocess_data, split_data
 from src.train import (TOLERANCE, choose_threshold, evaluate_model, load_data, load_model,
-                       predict_fraud, save_model, train_model)
+                       predict_fraud, save_model, sha256_of, train_model)
 
 
 @pytest.fixture(scope="module")
@@ -87,6 +87,7 @@ class TestPipelineBoutEnBout:
         with pytest.raises(FileNotFoundError, match="introuvable"):
             load_model(tmp_path / "absent.pkl")
         (tmp_path / "corrompu.pkl").write_text("pas un modèle")
+        (tmp_path / "corrompu.pkl.sha256").write_text(sha256_of(tmp_path / "corrompu.pkl"))
         with pytest.raises(ValueError, match="illisible"):
             load_model(tmp_path / "corrompu.pkl")
         # Erreur d'entrée sur le pipeline rechargé

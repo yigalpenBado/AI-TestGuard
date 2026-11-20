@@ -159,11 +159,18 @@ def load_data(path):
 
 # Sauvegarde du modèle avec son seuil : le seuil choisi sur la validation
 # doit être réutilisé tel quel après rechargement.
+def sha256_of(path):
+    """Empreinte SHA-256 d'un fichier."""
+    import hashlib
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
 def save_model(model, threshold, path):
-    """Sauvegarde le modèle et son seuil dans un seul fichier (joblib)."""
+    """Sauvegarde le modèle et son seuil (joblib), plus son empreinte dans <fichier>.sha256."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump({"model": model, "threshold": threshold}, path)
+    Path(str(path) + ".sha256").write_text(sha256_of(path))
 
 
 # Rechargement du modèle sauvegardé : erreurs explicites si le fichier est absent ou invalide.
@@ -172,6 +179,13 @@ def load_model(path):
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"Fichier modèle introuvable : {path}")
+    # Sécurité : joblib.load peut exécuter du code contenu dans le fichier.
+    # On vérifie donc l'empreinte AVANT de charger : un fichier modifié est refusé.
+    empreinte = Path(str(path) + ".sha256")
+    if not empreinte.exists():
+        raise ValueError(f"Empreinte du modèle manquante : {empreinte}")
+    if sha256_of(path) != empreinte.read_text().strip():
+        raise ValueError(f"Intégrité du modèle non vérifiée (fichier modifié) : {path}")
     try:
         saved = joblib.load(path)
     except Exception as error:
